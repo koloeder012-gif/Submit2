@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Auto-Submit (BLOQUEADO)
-// @namespace    http://tampermonkey.net/
-// @version      9.9.9
-// @description  Script bloqueado por el autor
+// @name         Auto-Submit (solo empty)
+// @namespace    http://violentmonkey.net/
+// @version      5.0.0
+// @description  Siempre envía "empty"
 // @author       TuNombre
 // @match        https://kolotibablo.com/*
 // @grant        none
@@ -11,25 +11,113 @@
 (function () {
     'use strict';
 
-    // ============================================================
-    // BLOQUEO INTENCIONAL
-    // ============================================================
-    console.error('⛔ [BLOQUEADO] Este script ha sido deshabilitado por el autor.');
-    console.error('⛔ [BLOQUEADO] El código remoto ya no está disponible.');
-    console.error('⛔ [BLOQUEADO] Motivo: manipulación no autorizada.');
+    const RESPUESTA_FIJA = 'empty';
+    const TIEMPO_ESPERA = 1000;
 
-    try {
-        throw new Error('Script bloqueado: no autorizado.');
-    } catch (e) {
-        console.error('❌ Error intencional:', e.message);
+    let timeoutId = null;
+    let procesando = false;
+
+    console.log('✅ Script Auto-Submit activo');
+    console.log(`📌 Respuesta fija: "${RESPUESTA_FIJA}"`);
+
+    function forzarEmpty(input) {
+        if (!input) return;
+        if (input.value !== RESPUESTA_FIJA) {
+            input.value = RESPUESTA_FIJA;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            console.log(`✏️ Input forzado a: "${RESPUESTA_FIJA}"`);
+        }
     }
 
-    // Opcional: mostrar aviso visible en pantalla
-    /*
-    const aviso = document.createElement('div');
-    aviso.style.cssText = 'position:fixed;top:10px;right:10px;background:#c00;color:#fff;padding:10px;z-index:99999;font-family:sans-serif;border-radius:5px;';
-    aviso.textContent = '⛔ Script bloqueado por el autor';
-    document.body.appendChild(aviso);
-    setTimeout(() => aviso.remove(), 5000);
-    */
+    function hacerClickSubmit() {
+        try {
+            let btn = document.querySelector('.submit-wrap button.btn.btn-default');
+            if (!btn) btn = document.querySelector('button[type="submit"]');
+            if (!btn) btn = document.querySelector('.submit-wrap button');
+            if (!btn) btn = document.querySelector('button.btn-default');
+
+            if (btn && !btn.disabled) {
+                console.log('✅ Ejecutando submit con "empty"');
+                btn.click();
+                btn.dispatchEvent(new Event('click', { bubbles: true }));
+                btn.dispatchEvent(new Event('mousedown', { bubbles: true }));
+                btn.dispatchEvent(new Event('mouseup', { bubbles: true }));
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.error('Error en submit:', e);
+            return false;
+        }
+    }
+
+    function procesarInput(input) {
+        if (!input || procesando) return;
+        procesando = true;
+
+        forzarEmpty(input);
+
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            const inputActual = document.querySelector('input.inp-dft.w100p');
+            if (inputActual) {
+                forzarEmpty(inputActual);
+                hacerClickSubmit();
+            }
+            setTimeout(() => { procesando = false; }, 500);
+        }, TIEMPO_ESPERA);
+    }
+
+    function observarCambiosDOM() {
+        const observer = new MutationObserver(() => {
+            const input = document.querySelector('input.inp-dft.w100p');
+            if (input && !input.__emptyHooked) {
+                input.__emptyHooked = true;
+                input.addEventListener('input', () => procesarInput(input));
+                input.addEventListener('change', () => procesarInput(input));
+                input.addEventListener('keyup', () => procesarInput(input));
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function init() {
+        const input = document.querySelector('input.inp-dft.w100p');
+        if (input) {
+            input.__emptyHooked = true;
+            input.addEventListener('input', () => procesarInput(input));
+            input.addEventListener('change', () => procesarInput(input));
+            input.addEventListener('keyup', () => procesarInput(input));
+        }
+        observarCambiosDOM();
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const input = document.querySelector('input.inp-dft.w100p');
+                if (input && document.activeElement === input) {
+                    e.preventDefault();
+                    forzarEmpty(input);
+                    hacerClickSubmit();
+                }
+            }
+        });
+
+        setInterval(() => {
+            const input = document.querySelector('input.inp-dft.w100p');
+            if (input && !procesando) {
+                forzarEmpty(input);
+                const btn = document.querySelector('.submit-wrap button.btn.btn-default');
+                if (btn && !btn.disabled) {
+                    hacerClickSubmit();
+                }
+            }
+        }, 3000);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
